@@ -1,4 +1,4 @@
-#  SEN1FLOODS11 — MobileNetV2 Semi-Supervised Training
+#  SEN1FLOODS11 — ShuffleNet V2 (x1.0) Semi-Supervised Training
 
 import os, copy, random, warnings
 warnings.filterwarnings("ignore")
@@ -12,7 +12,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader, WeightedRandomSampler
 from torchvision import transforms, models
-from torchvision.models import MobileNet_V2_Weights
+from torchvision.models import ShuffleNet_V2_X1_0_Weights
 from sklearn.metrics import (
     accuracy_score, f1_score, precision_score, recall_score, roc_auc_score
 )
@@ -131,7 +131,7 @@ a_i, a_f  = 0.0, 1.0
 DEVICE    = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # λ sweep: 0.0, 0.1, 0.2, ... 1.0  (11 values)
-# FloodNet MobileNetV2 run used fixed λ=0.2 → use [0.2] to replicate it.
+# FloodNet ShuffleNet V2 run used fixed λ=0.2 → use [0.2] to replicate it.
 LAMBDA_VALUES = [round(x * 0.1, 1) for x in range(11)]
 
 print(f"\nDevice  : {DEVICE}")
@@ -198,22 +198,25 @@ val_ldr   = DataLoader(val_ds,   batch_size=BATCH, shuffle=False,
 unl_ldr   = DataLoader(unl_ds,   batch_size=BATCH, shuffle=False,
                        num_workers=2, pin_memory=True)
 
-# ── 10. Build MobileNetV2 ─────────────────────────────────────────────
-def build_mobilenetv2():
+# ── 10. Build ShuffleNet V2 ───────────────────────────────────────────
+#  ShuffleNet V2 uses channel splitting and shuffling for efficient
+#  computation on mobile/embedded devices. x1.0 = standard width.
+def build_shufflenet_v2():
     """
-    MobileNetV2 with pretrained ImageNet weights.
-    Replace classifier: Dropout(0.2) + Linear 1280 → 1 (binary sigmoid).
+    ShuffleNet V2 (x1.0) with pretrained ImageNet weights.
+    Replace final FC: 1024 → 1 (binary output, raw logits —
+    BCEWithLogitsLoss applies the sigmoid internally, equivalent
+    to the Sigmoid+BCELoss used in the FloodNet notebook).
     """
-    m = models.mobilenet_v2(weights=MobileNet_V2_Weights.IMAGENET1K_V1)
-    m.classifier = nn.Sequential(
-        nn.Dropout(0.2),
-        nn.Linear(m.last_channel, 1)   # 1280 → 1
+    m = models.shufflenet_v2_x1_0(
+        weights=ShuffleNet_V2_X1_0_Weights.IMAGENET1K_V1
     )
+    m.fc = nn.Linear(m.fc.in_features, 1)   # 1024 → 1
     return m
 
-_probe = build_mobilenetv2()
+_probe = build_shufflenet_v2()
 total_p = sum(p.numel() for p in _probe.parameters())
-print(f"\n=== Building MobileNetV2 ===")
+print(f"\n=== Building ShuffleNet V2 (x1.0) ===")
 print(f"  Total params     : {total_p/1e6:.1f}M")
 print(f"  Input            : 3 × {IMG_SIZE} × {IMG_SIZE}")
 print(f"  Output           : 1 node (BCEWithLogitsLoss)")
@@ -241,8 +244,8 @@ def evaluate(model, loader):
 
 # ── 12. One full training run for a given λ ───────────────────────────
 def train_one_lambda(lam):
-    """Train MobileNetV2 for E epochs with uncertainty offset = lam."""
-    model     = build_mobilenetv2().to(DEVICE)
+    """Train ShuffleNet V2 for E epochs with uncertainty offset = lam."""
+    model     = build_shufflenet_v2().to(DEVICE)
     optimizer = optim.Adam(model.parameters(), lr=LR)
     criterion = nn.BCEWithLogitsLoss()
 
@@ -253,7 +256,7 @@ def train_one_lambda(lam):
     best_state = None
 
     print(f"\n{'═'*88}")
-    print(f"  MobileNetV2  |  λ = {lam:.1f}  |  {E} epochs")
+    print(f"  ShuffleNet V2  |  λ = {lam:.1f}  |  {E} epochs")
     print(f"{'═'*88}")
     print(f"{'Ep':>3} │ {'λ':>4} │ {'α':>5} │ {'Loss':>8} │ "
           f"{'Acc':>6} │ {'F1':>6} │ {'Prec':>6} │ {'Rec':>6} │ {'AUC':>6}")
@@ -330,7 +333,7 @@ def train_one_lambda(lam):
 
 # ── 13. λ SWEEP ───────────────────────────────────────────────────────
 print("\n\n" + "█"*88)
-print("  STARTING λ SWEEP  —  MobileNetV2  |  SEN1FLOODS11")
+print("  STARTING λ SWEEP  —  ShuffleNet V2  |  SEN1FLOODS11")
 print("█"*88)
 
 all_history   = []   # every epoch of every λ
@@ -373,17 +376,17 @@ print(f"  Best Epoch     : {int(best_overall['epoch'])}")
 # ── 15. Save ──────────────────────────────────────────────────────────
 OUT = "/kaggle/working" if os.path.isdir("/kaggle/working") else "."
 all_df = pd.DataFrame(all_history)
-all_df.to_csv(f"{OUT}/mobilenetv2_sen1floods11_all_history.csv", index=False)
-summary_df.to_csv(f"{OUT}/mobilenetv2_sen1floods11_lambda_summary.csv", index=False)
+all_df.to_csv(f"{OUT}/shufflenetv2_sen1floods11_all_history.csv", index=False)
+summary_df.to_csv(f"{OUT}/shufflenetv2_sen1floods11_lambda_summary.csv", index=False)
 torch.save(best_states[best_lambda],
-           f"{OUT}/mobilenetv2_sen1floods11_best.pth")
-print(f"\nSaved → mobilenetv2_sen1floods11_all_history.csv")
-print(f"Saved → mobilenetv2_sen1floods11_lambda_summary.csv")
-print(f"Saved → mobilenetv2_sen1floods11_best.pth  (λ={best_lambda})")
+           f"{OUT}/shufflenetv2_sen1floods11_best.pth")
+print(f"\nSaved → shufflenetv2_sen1floods11_all_history.csv")
+print(f"Saved → shufflenetv2_sen1floods11_lambda_summary.csv")
+print(f"Saved → shufflenetv2_sen1floods11_best.pth  (λ={best_lambda})")
 
 # ── 16. Plot 1 — metrics vs λ (summary) ──────────────────────────────
 fig, axes = plt.subplots(2, 3, figsize=(16, 8))
-fig.suptitle("MobileNetV2 | SEN1FLOODS11 | Best metrics vs λ",
+fig.suptitle("ShuffleNet V2 | SEN1FLOODS11 | Best metrics vs λ",
              fontsize=13, fontweight="bold")
 pairs = [("accuracy","Accuracy","tab:blue"),
          ("f1","F1 Score","tab:green"),
@@ -408,10 +411,10 @@ for ax, (col, title, color) in zip(axes.flat, pairs):
     ax.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(f"{OUT}/mobilenetv2_sen1floods11_metrics_vs_lambda.png",
+plt.savefig(f"{OUT}/shufflenetv2_sen1floods11_metrics_vs_lambda.png",
             dpi=150, bbox_inches="tight")
 plt.show()
-print("Saved → mobilenetv2_sen1floods11_metrics_vs_lambda.png")
+print("Saved → shufflenetv2_sen1floods11_metrics_vs_lambda.png")
 
 # ── 17. Plot 2 — training curves for best λ ───────────────────────────
 best_hist = all_df[all_df["lambda_"] == best_lambda].reset_index(drop=True)
@@ -419,7 +422,7 @@ best_ep   = int(best_overall["epoch"])
 
 fig2, axes2 = plt.subplots(2, 3, figsize=(16, 8))
 fig2.suptitle(
-    f"MobileNetV2 | SEN1FLOODS11 | λ={best_lambda} (best) | Best epoch={best_ep}",
+    f"ShuffleNet V2 | SEN1FLOODS11 | λ={best_lambda} (best) | Best epoch={best_ep}",
     fontsize=13, fontweight="bold"
 )
 for ax, (col, title, color) in zip(axes2.flat, pairs[:-1]):
@@ -448,9 +451,9 @@ ax_last.legend(fontsize=6, ncol=2)
 ax_last.grid(True, alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(f"{OUT}/mobilenetv2_sen1floods11_training_curves.png",
+plt.savefig(f"{OUT}/shufflenetv2_sen1floods11_training_curves.png",
             dpi=150, bbox_inches="tight")
 plt.show()
-print("Saved → mobilenetv2_sen1floods11_training_curves.png")
+print("Saved → shufflenetv2_sen1floods11_training_curves.png")
 
 print("\n✓ All done.")
