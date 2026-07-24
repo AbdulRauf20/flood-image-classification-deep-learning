@@ -1,25 +1,4 @@
-# ╔══════════════════════════════════════════════════════════════════════╗
 #  SEN1FLOODS11 — VGG-16 Semi-Supervised Training
-#  Paper : "Flood or Non-Flooded" (Jackson et al., Water 2023, 15, 875)
-#  Architecture: 13 conv + 5 maxpool + 3 dense | ~138M params | 224×224
-#  Same Algorithm 1 + λ technique as the FloodNet run:
-#  λ swept from 0.0 → 1.0 (step 0.1) — 50 epochs per λ
-#  Adam lr=0.0001 | batch=16 | 80/20 labeled split | α ramp 20→40
-#
-#  Dataset adaptations (technique unchanged — same as ResNet-18 script):
-#   • SEN1FLOODS11 ships pixel-level water masks, not image classes.
-#     A chip is labeled FLOODED(1) if ≥ FLOOD_THRESHOLD of its valid
-#     pixels are water, else NON-FLOODED(0).   (mask: -1 nodata, 0, 1)
-#   • Sentinel-1 SAR chips have 2 bands (VV, VH) in decibels.
-#     We build a 3-channel composite [VV, VH, (VV+VH)/2], scale dB
-#     to [0,1], then apply ImageNet normalization so the pretrained
-#     VGG-16 input distribution matches the FloodNet setup.
-#   • Unlabeled pool: uses the weakly-labeled S1 chips if present in
-#     the dataset; otherwise holds out UNLABELED_FRACTION of the train
-#     chips as "unlabeled" (their labels are discarded), which is the
-#     standard semi-supervised simulation.
-# ╚══════════════════════════════════════════════════════════════════════╝
-
 import os, copy, random, warnings
 warnings.filterwarnings("ignore")
 import numpy as np
