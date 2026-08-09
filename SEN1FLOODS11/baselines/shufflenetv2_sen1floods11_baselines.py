@@ -1,22 +1,3 @@
-# ╔══════════════════════════════════════════════════════════════════════╗
-#  SEN1FLOODS11 — ShuffleNet V2 (x1.0) SUPERVISED BASELINES
-#  Companion to shufflenetv2_sen1floods11_lambda.py (semi-supervised sweep).
-#
-#  Two baselines requested by the team lead:
-#   1) SUPERVISED-ONLY : train on the same labeled train split the SSL
-#      runs used — no pseudo-labeling ever. This is the FLOOR the
-#      semi-supervised method must beat to be useful.
-#   2) FULL-SUPERVISION: train on labeled train split + the unlabeled
-#      pool WITH its true labels revealed (hidden hand-mask labels, or
-#      weak-mask labels if the weak pool is in use). This is the
-#      CEILING — what SSL could reach with perfect pseudo-labels.
-#
-#  Everything else is IDENTICAL to the λ script so results are directly
-#  comparable: same seed and RNG call order (→ chip-for-chip identical
-#  train/val/hidden splits), same 50 epochs, Adam lr=0.0001, batch=16,
-#  weighted sampler, same metrics and val set.
-# ╚══════════════════════════════════════════════════════════════════════╝
-
 import os, copy, random, warnings
 warnings.filterwarnings("ignore")
 import numpy as np
