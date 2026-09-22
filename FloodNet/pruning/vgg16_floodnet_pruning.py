@@ -18,7 +18,7 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 
 # ── 0. Experiment knobs ────────────────────────────────────────────────
-SEED       = 42                    # single seed this time
+SEED       = 45                    # single seed this time
 LEVELS     = [0.20, 0.40, 0.60, 0.80, 0.90]   # 20 → 90
 METHODS    = ["unstructured", "structured"]
 E          = 50                    # dense training epochs
