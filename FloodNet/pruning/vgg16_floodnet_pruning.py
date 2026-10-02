@@ -18,7 +18,8 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 
 # ── 0. Experiment knobs ────────────────────────────────────────────────
-SEED       = 45                    # single seed this time
+DATA_SEED  = 42                    # fixed → identical train/val split always
+SEED       = 45                    # single training seed this time
 LEVELS     = [0.20, 0.40, 0.60, 0.80, 0.90]   # 20 → 90
 METHODS    = ["unstructured", "structured"]
 E          = 50                    # dense training epochs
@@ -31,7 +32,7 @@ A_I    = 0.0
 A_F    = 1.0
 LAMBDA = 0.2    # uncertainty offset (best in paper Table 1)
 
-random.seed(SEED); np.random.seed(SEED)
+random.seed(DATA_SEED); np.random.seed(DATA_SEED)
 torch.manual_seed(SEED)
 if torch.cuda.is_available(): torch.cuda.manual_seed_all(SEED)
 
@@ -64,18 +65,22 @@ assert BASE is not None, "Could not locate the FloodNet Track-1 folder."
 LABELED_FLOODED    = os.path.join(BASE, "Train", "Labeled", "Flooded",     "image")
 LABELED_NONFLOODED = os.path.join(BASE, "Train", "Labeled", "Non-Flooded", "image")
 UNLABELED          = os.path.join(BASE, "Train", "Unlabeled", "image")
-VAL_BASE           = os.path.join(BASE, "Validation")
-TEST_BASE          = os.path.join(BASE, "Test")
 
 print("=== Path Check ===")
 for name, p in [("Labeled Flooded",    LABELED_FLOODED),
                 ("Labeled NonFlooded", LABELED_NONFLOODED),
-                ("Unlabeled",          UNLABELED),
-                ("Validation",         VAL_BASE),
-                ("Test",               TEST_BASE)]:
+                ("Unlabeled",          UNLABELED)]:
     print(f"  {'OK' if os.path.exists(p) else 'MISSING':7} {name:<20} → {p}")
 
-# ── 2. Build image & label lists (identical to vgg-16.ipynb) ───────────
+# ── 2. Build image & label lists ───────────────────────────────────────
+#  NOTE: the public FloodNet Track-1 release has NO class labels for the
+#  official Validation / Test folders (held out for the challenge
+#  leaderboard — just Validation/image, Test/image). The old notebook's
+#  fallback labeled every val/test image "flooded" → one-class y_true,
+#  NaN ROC-AUC, meaningless accuracy/F1 and broken checkpoint selection.
+#  Fix: derive a stratified 80/20 train/val split from the 398 labeled
+#  training images (same approach as the SEN1FLOODS11 pruning script),
+#  seeded with the fixed DATA_SEED so the split never changes.
 def get_images(folder):
     return sorted(
         glob.glob(os.path.join(folder, "*.jpg"))  +
@@ -83,25 +88,23 @@ def get_images(folder):
         glob.glob(os.path.join(folder, "*.jpeg"))
     )
 
-def get_labeled_split(split_base):
-    labeled = []
-    flooded_dir    = os.path.join(split_base, "Flooded",     "image")
-    nonflooded_dir = os.path.join(split_base, "Non-Flooded", "image")
-    if os.path.exists(flooded_dir):
-        labeled += [(p, 1) for p in get_images(flooded_dir)]
-    if os.path.exists(nonflooded_dir):
-        labeled += [(p, 0) for p in get_images(nonflooded_dir)]
-    if not labeled:
-        img_dir = os.path.join(split_base, "image")
-        labeled = [(p, 1) for p in get_images(img_dir)]
-    return labeled
-
-flooded_imgs    = [(p, 1) for p in get_images(LABELED_FLOODED)]
-nonflooded_imgs = [(p, 0) for p in get_images(LABELED_NONFLOODED)]
-TRAIN_SAMPLES   = flooded_imgs + nonflooded_imgs
+flooded_s    = [(p, 1) for p in get_images(LABELED_FLOODED)]
+nonflooded_s = [(p, 0) for p in get_images(LABELED_NONFLOODED)]
 UNLABELED_PATHS = get_images(UNLABELED)
-VAL_SAMPLES     = get_labeled_split(VAL_BASE)
-TEST_SAMPLES    = get_labeled_split(TEST_BASE)
+
+# stratified 80/20 split (per-class shuffle, like SEN1FLOODS11)
+random.shuffle(flooded_s)
+random.shuffle(nonflooded_s)
+
+def split80(lst):
+    cut = int(0.8 * len(lst))
+    return lst[:cut], lst[cut:]
+
+f_train,  f_val  = split80(flooded_s)
+nf_train, nf_val = split80(nonflooded_s)
+
+TRAIN_SAMPLES = f_train + nf_train
+VAL_SAMPLES   = f_val   + nf_val
 
 def class_counts(samples):
     f  = sum(1 for _, l in samples if l == 1)
@@ -109,11 +112,16 @@ def class_counts(samples):
     return f, nf
 
 print("\n=== Dataset Summary ===")
-f, nf = class_counts(TRAIN_SAMPLES)
-print(f"  Train labeled : {len(TRAIN_SAMPLES)} ({f} flooded | {nf} non-flooded)")
-print(f"  Unlabeled     : {len(UNLABELED_PATHS)}")
-print(f"  Validation    : {len(VAL_SAMPLES)}")
-print(f"  Test          : {len(TEST_SAMPLES)}")
+for name, s in [("Train", TRAIN_SAMPLES), ("Val", VAL_SAMPLES)]:
+    f, nf = class_counts(s)
+    print(f"  {name:<9}: {len(s)} images ({f} flooded | {nf} non-flooded)")
+print(f"  Unlabeled: {len(UNLABELED_PATHS)} images (no ground truth)")
+
+# hard guard — both classes MUST be present or every metric is invalid
+vf, vnf = class_counts(VAL_SAMPLES)
+assert vf > 0 and vnf > 0, (
+    "Validation set has only ONE class — metrics (AUC) would be "
+    "NaN/meaningless. Check the dataset folder structure.")
 
 #  The two baseline runs (edit this list to split work across sessions):
 #    supervised_only → plain supervised training on the 398 labeled chips
@@ -160,8 +168,6 @@ class UnlabeledDS(Dataset):
         return transform(img)
 
 val_ldr  = DataLoader(LabeledDS(VAL_SAMPLES),  batch_size=BATCH,
-                      shuffle=False, num_workers=2, pin_memory=True)
-test_ldr = DataLoader(LabeledDS(TEST_SAMPLES), batch_size=BATCH,
                       shuffle=False, num_workers=2, pin_memory=True)
 unlab_ldr = DataLoader(UnlabeledDS(UNLABELED_PATHS), batch_size=BATCH,
                        shuffle=False, num_workers=2, pin_memory=True)
@@ -406,19 +412,15 @@ print(f"\nDense VGG-16: {DENSE_PARAMS/1e6:.2f}M params | "
 CONFIGS = [(m, a) for m in METHODS for a in LEVELS]
 study_rows = []
 
-def record(run, method, amount, best_ep, nonzero, eff, vmetrics, tmetrics):
-    va, vf1, vp, vr, vroc = vmetrics
-    ta, tf1, tp, tr, troc = tmetrics
+def record(run, method, amount, best_ep, nonzero, eff, metrics):
+    acc, f1, prec, rec, roc = metrics
     study_rows.append(dict(
         run=run, seed=SEED, method=method, amount=amount,
         best_epoch=best_ep, params_nonzero=nonzero,
         macs_effective=int(eff),
-        val_accuracy=round(va,4),  val_f1=round(vf1,4),
-        val_precision=round(vp,4), val_recall=round(vr,4),
-        val_roc_auc=round(vroc,4),
-        test_accuracy=round(ta,4),  test_f1=round(tf1,4),
-        test_precision=round(tp,4), test_recall=round(tr,4),
-        test_roc_auc=round(troc,4)))
+        accuracy=round(acc,4), f1=round(f1,4),
+        precision=round(prec,4), recall=round(rec,4),
+        roc_auc=round(roc,4)))
 
 for run_name in BASELINE_RUNS:
     semi = (run_name == "semi_supervised")
@@ -427,11 +429,8 @@ for run_name in BASELINE_RUNS:
     print("█"*88)
 
     dense_model, dmetrics, dep = get_dense(run_name, semi)
-    dtest = evaluate(dense_model, test_ldr)
-    record(run_name, "dense", 0.0, dep, DENSE_PARAMS, DENSE_MACS,
-           dmetrics, dtest)
-    print(f"  DENSE │ val F1 {dmetrics[1]:.4f} │ test F1 {dtest[1]:.4f} "
-          f"│ test AUC {dtest[4]:.4f}")
+    record(run_name, "dense", 0.0, dep, DENSE_PARAMS, DENSE_MACS, dmetrics)
+    print(f"  DENSE │ val F1 {dmetrics[1]:.4f} │ val AUC {dmetrics[4]:.4f}")
 
     dense_state = copy.deepcopy(dense_model.state_dict())
     del dense_model
@@ -457,16 +456,14 @@ for run_name in BASELINE_RUNS:
             model, TRAIN_SAMPLES, FT_EPOCHS, semi=semi,
             tag=f"{method[:6]}@{amount:.0%}")
         finalize_pruning(model)
-        ft_test = evaluate(model, test_ldr)
 
         total, nonzero = count_nonzero_params(model)
         eff = effective_macs(model, PER_LAYER_MACS)
-        record(run_name, method, amount, ft_ep, nonzero, eff,
-               ft_metrics, ft_test)
+        record(run_name, method, amount, ft_ep, nonzero, eff, ft_metrics)
 
         print(f"    → NZ params {nonzero/1e6:.2f}M │ "
-              f"eff FLOPs {2*eff/1e9:.2f}G │ val F1 {ft_metrics[1]:.4f} │ "
-              f"test F1 {ft_test[1]:.4f} (best ep {ft_ep})")
+              f"eff FLOPs {2*eff/1e9:.2f}G │ val F1 {ft_metrics[1]:.4f} "
+              f"(best ep {ft_ep})")
 
         del model
         if DEVICE.type == "cuda": torch.cuda.empty_cache()
@@ -487,26 +484,26 @@ print(f"  PRUNING SUMMARY — VGG-16 | FLOODNET | seed {SEED} | "
       f"FT {FT_EPOCHS} ep")
 print("═"*100)
 print(f"{'Run':<17} │ {'Method':<13} │ {'Amt':>4} │ {'NZ params':>10} │ "
-      f"{'val F1':>7} │ {'test F1':>7} │ {'test Acc':>8} │ {'test AUC':>8}")
+      f"{'F1':>7} │ {'Acc':>7} │ {'Prec':>7} │ {'Rec':>7} │ {'AUC':>7}")
 print("─"*100)
 for _, r in study_df.iterrows():
     print(f"{r['run']:<17} │ {r['method']:<13} │ {r['amount']:>4.0%} │ "
-          f"{r['params_nonzero']/1e6:>8.2f} M │ {r['val_f1']:>7.4f} │ "
-          f"{r['test_f1']:>7.4f} │ {r['test_accuracy']:>8.4f} │ "
-          f"{r['test_roc_auc']:>8.4f}")
+          f"{r['params_nonzero']/1e6:>8.2f} M │ {r['f1']:>7.4f} │ "
+          f"{r['accuracy']:>7.4f} │ {r['precision']:>7.4f} │ "
+          f"{r['recall']:>7.4f} │ {r['roc_auc']:>7.4f}")
 print("═"*100)
 
 # delta vs dense (single seed → no noise band, just raw deltas)
-print("\n  ΔF1 (test) vs dense, same run:")
+print("\n  ΔF1 (val) vs dense, same run:")
 for run_name in BASELINE_RUNS:
     d = study_df[(study_df["run"] == run_name) &
                  (study_df["method"] == "dense")]
     if len(d) == 0: continue
-    d_f1 = d.iloc[0]["test_f1"]
+    d_f1 = d.iloc[0]["f1"]
     for _, r in study_df[(study_df["run"] == run_name) &
                          (study_df["method"] != "dense")].iterrows():
         print(f"    {run_name:<17} {r['method']:<13} "
-              f"@{r['amount']:>4.0%}  ΔF1 = {r['test_f1'] - d_f1:+.4f}")
+              f"@{r['amount']:>4.0%}  ΔF1 = {r['f1'] - d_f1:+.4f}")
 
 # ── 14. Plot — F1 vs pruning level ─────────────────────────────────────
 fig, axes = plt.subplots(1, len(BASELINE_RUNS), figsize=(15, 5.5),
@@ -520,17 +517,17 @@ for ax, run_name in zip(axes.flat, BASELINE_RUNS):
     d = study_df[(study_df["run"] == run_name) &
                  (study_df["method"] == "dense")]
     if len(d) > 0:
-        ax.axhline(d.iloc[0]["test_f1"], color="tab:green",
+        ax.axhline(d.iloc[0]["f1"], color="tab:green",
                    linewidth=1.6, label="dense")
     for method in METHODS:
         sub = study_df[(study_df["run"] == run_name) &
                        (study_df["method"] == method)].sort_values("amount")
-        ax.plot([a*100 for a in sub["amount"]], sub["test_f1"],
+        ax.plot([a*100 for a in sub["amount"]], sub["f1"],
                 color=mcolors[method], marker="o", linewidth=1.6,
                 label=method)
     ax.set_title(run_name, fontsize=11)
     ax.set_xlabel("Pruning amount (%)")
-    ax.set_ylabel("Test F1 (best-val checkpoint)")
+    ax.set_ylabel("Best val F1")
     ax.grid(True, alpha=0.3)
     ax.legend(fontsize=8)
 
