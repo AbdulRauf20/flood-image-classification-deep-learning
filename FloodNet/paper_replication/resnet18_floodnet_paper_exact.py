@@ -50,9 +50,10 @@ from sklearn.metrics import (
 import matplotlib.pyplot as plt
 
 # ── 0. Knobs (exact from authors' code) ────────────────────────────────
+MODEL_NAME      = "resnet18"  # "resnet18" = paper-exact | "vgg16" = lead's follow-up
 SEED            = 42          # authors did NOT seed; we seed for reproducibility
 RESIZE          = (400, 300)  # cv2 (width, height)
-BATCH           = 64
+BATCH           = 64 if MODEL_NAME == "resnet18" else 16   # VGG16 @300×400 OOMs at 64
 LR              = 0.01        # SGD, no momentum
 EPOCHS          = 200
 START_ALPHA     = 10          # alpha = 0 before this epoch
@@ -220,14 +221,25 @@ unlab_ldr = DataLoader(T1Dataset(unlabeled_pool, None, tfm["valid"]),
                        batch_size=BATCH, shuffle=True,
                        num_workers=2, pin_memory=True)
 
-# ── 5. Model (exact): resnet18 pretrained, 2-logit head, CE, SGD ───────
-model = torchvision.models.resnet18(
-    weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1)
-model.fc = nn.Linear(model.fc.in_features, 2)
-model = model.to(DEVICE)
+# ── 5. Model: pretrained backbone, 2-logit head, CE, SGD ───────────────
+#  resnet18 = exact paper model (11.6M params, Table 1)
+#  vgg16    = same pipeline, swapped backbone (lead's follow-up question)
+def build_model(name):
+    if name == "resnet18":
+        m = torchvision.models.resnet18(
+            weights=torchvision.models.ResNet18_Weights.IMAGENET1K_V1)
+        m.fc = nn.Linear(m.fc.in_features, 2)
+    elif name == "vgg16":
+        m = torchvision.models.vgg16(
+            weights=torchvision.models.VGG16_Weights.IMAGENET1K_V1)
+        m.classifier[-1] = nn.Linear(4096, 2)
+    else:
+        raise ValueError(name)
+    return m
 
+model = build_model(MODEL_NAME).to(DEVICE)
 n_params = sum(p.numel() for p in model.parameters())
-print(f"\nResNet18: {n_params/1e6:.2f}M params (paper: 11.6M)")
+print(f"\n{MODEL_NAME}: {n_params/1e6:.2f}M params (paper ResNet18: 11.6M)")
 
 criterion = nn.CrossEntropyLoss()
 optimizer = torch.optim.SGD(model.parameters(), lr=LR)
@@ -256,7 +268,7 @@ alphas = np.linspace(0, MAX_ALPHA, REACH_MAX_ALPHA - START_ALPHA)
 
 history = []
 best_f1, best_epoch, best_state, best_metrics = -1, -1, None, None
-CKPT = os.path.join(OUT, "resnet18_floodnet_paper_best.pt")
+CKPT = os.path.join(OUT, f"{MODEL_NAME}_floodnet_paper_best.pt")
 
 print(f"\nTraining {EPOCHS} epochs | alpha 0 → {MAX_ALPHA} "
       f"(ep {START_ALPHA} → {REACH_MAX_ALPHA}) | SGD lr={LR} | batch {BATCH}")
@@ -327,7 +339,8 @@ for epoch in range(EPOCHS):
 
     # crash-safe history dump
     pd.DataFrame(history).to_csv(
-        os.path.join(OUT, "resnet18_floodnet_paper_history.csv"), index=False)
+        os.path.join(OUT, f"{MODEL_NAME}_floodnet_paper_history.csv"),
+        index=False)
 
 print("="*88)
 print(f"Total time: {(time.time()-t_start)/3600:.2f} h")
@@ -337,7 +350,8 @@ model.load_state_dict(best_state)
 acc, f1, prec, rec, roc = best_metrics
 
 print("\n" + "═"*60)
-print("  BEST MODEL (valid split, 199 images) vs PAPER Table 1")
+print(f"  BEST {MODEL_NAME.upper()} (valid split, 199 images) "
+      "vs PAPER Table 1 (ResNet18)")
 print("═"*60)
 print(f"  {'Metric':<12} {'Paper':>12} {'Ours (valid)':>14}")
 print(f"  {'-'*44}")
@@ -372,7 +386,7 @@ print(f"\nSaved → image_classes.json ({len(json_data)} test predictions)")
 # ── 10. Training curves ────────────────────────────────────────────────
 hist = pd.DataFrame(history)
 fig, axes = plt.subplots(1, 3, figsize=(18, 5))
-fig.suptitle("ResNet18 | FloodNet | paper-exact semi-supervised run",
+fig.suptitle(f"{MODEL_NAME} | FloodNet | paper-exact semi-supervised run",
              fontsize=13, fontweight="bold")
 
 axes[0].plot(hist["epoch"], hist["sup_loss"], label="supervised loss")
@@ -392,8 +406,8 @@ axes[2].set_xlabel("epoch"); axes[2].set_title("alpha schedule")
 axes[2].grid(alpha=0.3)
 
 plt.tight_layout()
-plt.savefig(os.path.join(OUT, "resnet18_floodnet_paper_curves.png"),
+plt.savefig(os.path.join(OUT, f"{MODEL_NAME}_floodnet_paper_curves.png"),
             dpi=150, bbox_inches="tight")
 plt.show()
-print("Saved → resnet18_floodnet_paper_curves.png")
+print(f"Saved → {MODEL_NAME}_floodnet_paper_curves.png")
 print("\n✓ All done.")
