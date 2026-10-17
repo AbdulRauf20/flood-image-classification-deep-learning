@@ -1,0 +1,115 @@
+\documentclass[11pt]{article}
+\usepackage[margin=2.2cm]{geometry}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage[hidelinks]{hyperref}
+
+\title{Cross-Dataset Pruning Study: ResNet18 and VGG-16 on\\
+Optical (FloodNet) vs.\ SAR (Sen1Floods11) Flood Classification}
+\author{Abdul Rauf}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section*{Setup}
+Both architectures were trained with an identical supervised pipeline on
+both datasets: image-level binary flood classification, 50/50 stratified
+train/validation split (seed 42), $400\times300$ inputs,
+horizontal/vertical flip augmentation, class-balanced sampling, SGD
+(lr $=0.01$), 50 dense epochs. Sen1Floods11 is per-pixel labeled, so
+chips were converted to image-level labels (flooded if $\geq 1\%$ of
+valid pixels are water; 441 chips, 293 flooded). FloodNet uses its 398
+labeled RGB images (51 flooded). Each model was pruned with global L1
+\emph{unstructured} and L1 \emph{structured} (filter/neuron) magnitude
+pruning at $\{10,30,50,70,90\}\%$, then fine-tuned for 50 epochs.
+Reported numbers are best-validation-F1 checkpoints.
+
+\begin{table}[h]
+\centering
+\caption{Full results. Params = nonzero parameters after pruning.
+\textcolor{red}{Red} rows are degenerate collapses: the network predicts
+``flooded'' for every image (recall $=1$, AUC $\approx 0.5$).}
+\footnotesize
+\begin{tabular}{llrr rr @{\hspace{1.4em}} rr}
+\toprule
+& & \multicolumn{2}{c}{} & \multicolumn{2}{c}{\textbf{FloodNet (optical)}} & \multicolumn{2}{c}{\textbf{Sen1Floods11 (SAR)}}\\
+\cmidrule(lr){5-6}\cmidrule(lr){7-8}
+\textbf{Arch.} & \textbf{Method} & \textbf{Ratio} & \textbf{Params (M)} & \textbf{Acc.} & \textbf{F1} & \textbf{Acc.} & \textbf{F1}\\
+\midrule
+\multirow{11}{*}{ResNet18}
+ & dense        & 0\%  & 11.18 & 0.975 & 0.898 & 0.878 & 0.907\\
+\cmidrule(lr){2-8}
+ & unstructured & 10\% & 10.06 & 0.975 & 0.898 & 0.873 & 0.902\\
+ & unstructured & 30\% &  7.83 & 0.975 & 0.898 & 0.891 & 0.918\\
+ & unstructured & 50\% &  5.59 & 0.970 & 0.875 & 0.873 & 0.902\\
+ & unstructured & 70\% &  3.36 & 0.975 & 0.902 & 0.873 & 0.904\\
+ & unstructured & 90\% &  1.13 & 0.965 & 0.857 & 0.833 & 0.874\\
+\cmidrule(lr){2-8}
+ & structured   & 10\% & 10.06 & 0.970 & 0.880 & 0.842 & 0.881\\
+ & structured   & 30\% &  7.82 & 0.985 & 0.939 & 0.842 & 0.879\\
+ & structured   & 50\% &  5.59 & 0.975 & 0.902 & 0.828 & 0.873\\
+ & structured   & 70\% &  3.37 & 0.970 & 0.875 & 0.801 & 0.853\\
+ & structured   & 90\% &  1.13 & 0.930 & 0.750 & 0.697 & 0.806\\
+\midrule
+\multirow{11}{*}{VGG-16}
+ & dense        & 0\%  & 134.27 & 0.970 & 0.875 & 0.824 & 0.864\\
+\cmidrule(lr){2-8}
+ & unstructured & 10\% & 120.84 & 0.975 & 0.902 & 0.824 & 0.865\\
+ & unstructured & 30\% &  93.99 & 0.975 & 0.898 & 0.819 & 0.865\\
+ & unstructured & 50\% &  67.14 & 0.980 & 0.917 & 0.819 & 0.865\\
+ & unstructured & 70\% &  40.29 & 0.980 & 0.917 & 0.824 & 0.867\\
+ & unstructured & 90\% &  13.44 & 0.980 & 0.923 & 0.824 & 0.864\\
+\cmidrule(lr){2-8}
+ & structured   & 10\% & 120.83 & 0.975 & 0.898 & 0.828 & 0.868\\
+ & structured   & 30\% &  93.98 & 0.980 & 0.926 & 0.824 & 0.869\\
+ & structured   & 50\% &  67.14 & 0.975 & 0.894 & 0.747 & 0.833\\
+ & structured   & 70\% &  40.31 & 0.960 & 0.833 & \textcolor{red}{0.665} & \textcolor{red}{0.799}\\
+ & structured   & 90\% &  13.45 & \textcolor{red}{0.126} & \textcolor{red}{0.223} & \textcolor{red}{0.665} & \textcolor{red}{0.799}\\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section*{Key findings}
+\begin{enumerate}
+\item \textbf{Unstructured pruning holds on BOTH modalities.} Up to 90\%
+sparsity, F1 stays within $\pm 0.05$ of dense for both architectures on
+both datasets. Notably, VGG-16 at 90\% unstructured (13.4M nonzero
+params, ResNet18 scale) \emph{exceeds} its dense baseline on FloodNet
+(0.923 vs.\ 0.875) and matches it on SAR (0.864).
+
+\item \textbf{Structured pruning is where behaviour diverges --- and SAR
+breaks first.} VGG-16 collapses at 70\% structured on SAR but only at
+90\% on optical. ResNet18 never fully collapses, but on SAR it degrades
+monotonically from the very first structured level ($-0.026$ F1 at 10\%,
+$-0.101$ at 90\%, accuracy $0.878\!\rightarrow\!0.697$), whereas on
+optical it is stable until 70\% and only drops at 90\%.
+
+\item \textbf{The collapse mode is a majority-class predictor, and class
+balance can hide it.} Collapsed runs predict ``flooded'' everywhere
+(recall $=1.0$, AUC $\approx 0.5$). Since Sen1Floods11 is 66\% flooded,
+a collapsed model still shows F1 $\approx 0.80$ there --- the F1 alone
+understates the SAR failure; on FloodNet (13\% flooded) the same failure
+is obvious (F1 $0.22$). Accuracy and AUC should accompany F1 in all
+future comparisons.
+\end{enumerate}
+
+\section*{Interpretation and proposed next steps}
+The answer to our question is the more interesting case: a heavily
+pruned classic CNN keeps its accuracy on both optical and SAR imagery
+\emph{only} under unstructured sparsity; under structured (filter-level)
+pruning the SAR task degrades earlier and more steeply than the optical
+one, on both architectures. A plausible explanation is that structured
+pruning removes entire ImageNet-pretrained filters, and the SAR task ---
+already out-of-distribution for these filters --- depends on a small
+subset of low-level texture channels that magnitude ranking does not
+protect; unstructured pruning preserves fragments of every filter.
+Proposed follow-ups: (i) repeat the structured runs over 2--3 seeds to
+confirm the monotonic SAR degradation is not noise; (ii) channel-importance
+analysis of which filters are removed on SAR vs.\ optical; (iii) test
+gentler fine-tuning (lower LR, longer schedule) and iterative/gradual
+structured pruning to see whether the SAR collapse is recoverable.
+
+\end{document}

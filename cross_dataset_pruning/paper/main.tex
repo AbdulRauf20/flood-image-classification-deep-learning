@@ -1,0 +1,473 @@
+% ============================================================
+% IEEE conference draft — "Does Compressibility Transfer Across
+% Sensors?" — built on the IEEEtran conference template
+% (https://www.ieee.org/conferences/publishing/templates)
+% Hard limit: 6 pages including references.
+% Results section intentionally contains placeholders ([TODO]).
+% ============================================================
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{xcolor}
+\usepackage{textcomp}
+
+% placeholder marker for numbers still to be filled in
+\newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
+
+\begin{document}
+
+\title{Does Compressibility Transfer Across Sensors?\\
+A Cross-Modality Study of CNN Pruning for Optical and SAR Flood
+Classification\thanks{\TODO{funding / acknowledgment if any}}}
+
+\author{\IEEEauthorblockN{Abdul Rauf}
+\IEEEauthorblockA{\textit{\TODO{department}} \\
+\textit{\TODO{university}}\\
+\TODO{city, country} \\
+\TODO{email}}
+\and
+\IEEEauthorblockN{\TODO{supervisor name}}
+\IEEEauthorblockA{\textit{\TODO{department}} \\
+\textit{\TODO{university}}\\
+\TODO{city, country} \\
+\TODO{email}}
+}
+
+\maketitle
+
+\begin{abstract}
+Deep convolutional networks are routinely compressed by magnitude
+pruning before deployment on the resource-constrained platforms used in
+disaster response, yet pruning studies are almost always conducted on a
+single dataset --- and almost always on optical imagery. We ask a simple
+question that this practice leaves unanswered: \emph{does the
+compressibility of a CNN transfer across sensing modalities?} We train
+ResNet18 and VGG-16 flood classifiers under one fixed supervised
+pipeline on two public flood datasets of different modalities ---
+FloodNet (optical UAV imagery) and Sen1Floods11 (Sentinel-1 SAR), the
+latter converted from per-pixel water masks to image-level labels ---
+and prune each model with global unstructured and filter-level
+structured $L_1$ magnitude pruning at sparsities from 10\% to 90\%,
+fine-tuning every configuration under an identical budget. We find that
+\TODO{one-sentence headline result, e.g., unstructured compressibility
+transfers across modalities while structured pruning degrades SAR
+performance substantially earlier than optical}. Our results suggest
+that compression choices validated on optical benchmarks cannot be
+assumed to hold for SAR, and we release our protocol to support
+multi-seed extensions of this study.
+\end{abstract}
+
+\begin{IEEEkeywords}
+network pruning, model compression, flood detection, SAR, optical
+remote sensing, FloodNet, Sen1Floods11
+\end{IEEEkeywords}
+
+% ------------------------------------------------------------------
+\section{Introduction}
+Rapid flood mapping is one of the most time-critical applications of
+remote sensing: response teams need scene-level situational awareness
+within hours of a disaster, often from platforms --- small UAVs, edge
+boxes, nanosatellites --- that cannot host large networks
+\cite{rahnemoonfar2021floodnet,khan2023floodresnet50}. Model
+compression, and in particular magnitude pruning
+\cite{han2015learning,li2017pruning}, is the standard route to meeting
+such constraints: weights or whole filters with small magnitude are
+removed and the network is fine-tuned, frequently recovering accuracy
+at high sparsity \cite{blalock2020state}.
+
+The evidence base for this practice, however, is narrow in one
+important way. Pruning methods are overwhelmingly validated on optical
+(RGB) benchmarks such as ImageNet \cite{deng2009imagenet}, and when
+they are applied in remote sensing it is typically to a single dataset
+at a time. Flood monitoring in practice spans at least two very
+different sensing modalities: high-resolution optical imagery from
+UAVs, which is only available in clear conditions, and synthetic
+aperture radar (SAR), which penetrates cloud cover and is often the
+only usable source during the flood event itself
+\cite{bonafilia2020sen1floods11}. A deployment pipeline that compresses
+a model for the optical case will sooner or later be asked to do the
+same for the SAR case.
+
+This paper is built around a single question:
+\begin{quote}
+\emph{Does a heavily pruned classic CNN hold its accuracy consistently
+on both optical and SAR flood imagery, or does one modality break down
+while the other does not?}
+\end{quote}
+Either answer is informative. If compressibility transfers, then
+sparsity budgets established on optical benchmarks can be reused for
+SAR deployments with reasonable confidence. If it does not --- if one
+modality degrades earlier or collapses outright --- then the pruning
+ratio itself becomes a modality-dependent hyperparameter, and
+compression recipes must be re-validated per sensor, which has direct
+consequences for operational flood-mapping systems.
+
+Answering the question fairly requires removing every confound except
+the data. We therefore fix a single supervised pipeline --- identical
+architecture definitions, input resolution, augmentation, class
+balancing, optimizer, schedule, checkpoint selection, pruning
+operators, sparsity levels, and fine-tuning budget --- and vary
+\emph{only} the dataset. We instantiate the study with two standard
+backbones of very different capacity, ResNet18 (11.2M parameters)
+\cite{he2016resnet} and VGG-16 (134.3M parameters)
+\cite{simonyan2015vgg}, on two public flood-classification datasets:
+FloodNet \cite{rahnemoonfar2021floodnet}, optical UAV imagery from
+Hurricane Harvey, and Sen1Floods11 \cite{bonafilia2020sen1floods11},
+Sentinel-1 SAR chips of global flood events. Sen1Floods11 is labeled
+per pixel, so we convert its hand-labeled water masks into image-level
+flooded/non-flooded labels with an explicit, reproducible rule
+(Section~\ref{sec:setup}). Each dense model is then pruned with the two
+canonical magnitude-pruning families --- global unstructured $L_1$
+pruning \cite{han2015learning} and structured $L_1$ filter pruning
+\cite{li2017pruning} --- at five ratios from 10\% to 90\%, and every
+pruned model is fine-tuned under the same budget as its dense parent.
+
+\noindent\textbf{Contributions.}
+\begin{itemize}
+\item A controlled $2\times2\times2\times5$ study (two architectures,
+two modalities, two pruning families, five sparsity ratios; 44 trained
+models in total) in which the training pipeline is held fixed and only
+the dataset varies, isolating the effect of sensing modality on
+compressibility.
+\item A reproducible protocol for converting per-pixel SAR flood masks
+(Sen1Floods11) into image-level classification labels, enabling
+like-for-like comparison with image-level optical benchmarks
+(FloodNet).
+\item Empirical evidence that \TODO{headline finding, 1--2 lines, fill
+after results are frozen}.
+\item A practical diagnostic observation: because flood datasets are
+class-imbalanced in opposite directions, collapsed classifiers can
+retain deceptively high F1 on one dataset while failing completely on
+the other; we argue accuracy, F1 and AUC must be read together when
+evaluating pruned models (Section~\ref{sec:results}).
+\end{itemize}
+
+% ------------------------------------------------------------------
+\section{Related Work}
+\subsection{Flood Classification Datasets and Baselines}
+\textbf{FloodNet} \cite{rahnemoonfar2021floodnet} is a high-resolution
+($3000\times4000$) UAV imagery dataset collected with DJI Mavic Pro
+quadcopters after Hurricane Harvey, providing a semi-supervised Track-1
+challenge with 398 labeled training images (51 flooded, 347
+non-flooded), 1{,}047 unlabeled training images, and validation/test
+splits whose classification labels were withheld for the challenge
+evaluation. \textbf{Sen1Floods11} \cite{bonafilia2020sen1floods11}
+provides 4{,}831 Sentinel-1 SAR chips of $512\times512$ pixels covering
+11 global flood events, including 446 hand-labeled chips whose
+per-pixel masks distinguish water, non-water, and invalid pixels; it is
+designed for per-pixel flood segmentation rather than image-level
+classification, which motivates the label conversion we describe in
+Section~\ref{sec:setup}.
+
+On the modeling side, Khose \emph{et al.}
+\cite{khose2021semisupervised} established a strong FloodNet Track-1
+classification baseline: a ResNet18 trained with pseudo-label
+semi-supervision \cite{lee2013pseudo} reaching 96.70\% test accuracy
+with 11.6M parameters --- outperforming substantially larger
+InceptionV3, ResNet50 and Xception baselines. Their result motivates
+our choice of ResNet18 as the small reference backbone; in this work,
+however, we deliberately use \emph{purely supervised} training for all
+runs, since pseudo-labeling would entangle compression effects with
+semi-supervision effects. Closest to our deployment motivation, Khan
+\emph{et al.} \cite{khan2023floodresnet50} propose Flood-ResNet50, a
+modified ResNet50 for flooded/non-flooded UAV image classification
+evaluated on-device (Jetson Nano) with 96.43\% accuracy and 86.36\% F1
+on FloodNet. Their study targets efficiency via architecture design on
+a single optical dataset; ours is complementary, asking whether a
+\emph{given} architecture compressed by pruning behaves consistently
+across optical and SAR data.
+
+\subsection{Network Pruning}
+Magnitude pruning removes parameters deemed unimportant by weight
+magnitude. \emph{Unstructured} pruning \cite{han2015learning} zeroes
+individual weights globally across layers and achieves high sparsity
+with little accuracy loss, though realized speedups require sparse
+kernels. \emph{Structured} pruning \cite{li2017pruning} removes entire
+filters or neurons, producing dense sub-networks that accelerate on
+commodity hardware but constraining what can be removed. Subsequent
+work has questioned what pruning actually preserves: the lottery-ticket
+hypothesis \cite{frankle2019lottery} locates sparse trainable
+sub-networks, Liu \emph{et al.} \cite{liu2019rethinking} argue that
+the value of pruning lies largely in the architecture it induces, and
+Blalock \emph{et al.} \cite{blalock2020state} document that pruning
+papers overwhelmingly evaluate on a small set of optical benchmarks
+under inconsistent protocols. To our knowledge, no prior work has held
+a flood-classification pipeline fixed and measured how the
+\emph{same} pruning protocol behaves across an optical and a SAR
+dataset; this is the gap we address.
+
+% ------------------------------------------------------------------
+\section{Experimental Setup}
+\label{sec:setup}
+
+\subsection{Datasets and Label Conversion}
+\textbf{FloodNet (optical).} We use the 398 labeled Track-1 training
+images (51 flooded / 347 non-flooded). Because classification labels
+for the official validation and test splits were withheld for the
+challenge server, all labeled evaluation must come from these 398
+images: we use a stratified 50/50 split (199 train / 199 validation,
+fixed seed), mirroring the split strategy of the public baseline
+implementation \cite{khose2021semisupervised}. Images are resized from
+$3000\times4000$ to $400\times300$.
+
+\textbf{Sen1Floods11 (SAR).} We use the hand-labeled subset: Sentinel-1
+chips with two polarization bands (VV, VH) and per-pixel masks with
+values $\{1{=}\text{water},\,0{=}\text{non-water},\,-1{=}\text{invalid}\}$.
+Since the dataset is natively per-pixel, we convert each chip to an
+image-level label with the rule
+\begin{equation}
+y = \mathbb{1}\!\left[\frac{\left|\{p : m_p = 1\}\right|}
+{\left|\{p : m_p \neq -1\}\right|} \;\geq\; \tau\right],
+\qquad \tau = 0.01,
+\label{eq:labelconv}
+\end{equation}
+i.e., a chip is \emph{flooded} if at least 1\% of its valid pixels are
+water; chips with no valid pixels are discarded. This yields 441
+usable chips (293 flooded / 148 non-flooded), split 50/50 stratified
+into 220 train / 221 validation chips with the same seed as FloodNet.
+For input compatibility with ImageNet-pretrained backbones, SAR
+backscatter is clipped to $[-50, 1]$\,dB, min--max scaled to $[0,1]$,
+and stacked as three channels $(\mathrm{VV}, \mathrm{VH},
+(\mathrm{VV}{+}\mathrm{VH})/2)$, then bilinearly resized to
+$400\times300$.
+
+Note the two datasets are imbalanced in \emph{opposite} directions:
+flooded images are the minority class in FloodNet (12.8\%) but the
+majority class in Sen1Floods11 (66.4\%). We return to the evaluation
+consequences of this in Sections~\ref{sec:results}
+and~\ref{sec:limitations}.
+
+\subsection{Unified Training Pipeline}
+All dense baselines and all fine-tuning runs share one pipeline,
+identical across datasets and architectures: ImageNet-pretrained
+backbone \cite{deng2009imagenet} with the final layer replaced by a
+2-logit head; cross-entropy loss; random horizontal and vertical flips
+as the only augmentation; a class-balanced weighted random sampler;
+SGD with learning rate $0.01$ and no momentum; 50 epochs; and model
+selection by best validation F1. The only architecture-forced
+difference is the batch size (64 for ResNet18, 16 for VGG-16, due to
+the memory footprint of VGG-16 at $400\times300$); it is held constant
+across datasets so that every optical-vs-SAR comparison is batch-size
+matched. All runs use a single fixed seed (42) for the split, the
+initialization and the data order (see
+Section~\ref{sec:limitations}).
+
+\subsection{Pruning Protocol}
+Starting from each dense checkpoint we apply, separately:
+\begin{itemize}
+\item \textbf{Global unstructured $L_1$} \cite{han2015learning}:
+individual weights of all convolutional and linear layers are ranked
+globally by magnitude and the smallest fraction $r$ is zeroed.
+\item \textbf{Structured $L_1$} \cite{li2017pruning}: for every
+convolutional layer with more than 8 output channels, the fraction $r$
+of output filters with smallest $L_1$ norm is removed (masked); for
+every linear layer with more than 8 output units, the same rule is
+applied to rows. The final 2-unit classifier is never pruned.
+\end{itemize}
+with $r \in \{0.10, 0.30, 0.50, 0.70, 0.90\}$. Each pruned model is
+fine-tuned for 50 epochs --- the same budget, optimizer and learning
+rate as dense training --- and the best-validation-F1 checkpoint is
+reported. Sparsity masks are kept fixed during fine-tuning. For every
+configuration we report the number of nonzero parameters and the
+effective multiply--accumulate count of the surviving weights. In
+total the study comprises $2$ architectures $\times$ $2$ datasets
+$\times$ ($1$ dense $+$ $2$ methods $\times$ $5$ ratios) $= 44$
+trained models.
+
+% ------------------------------------------------------------------
+\section{Experiments}
+We run the full protocol of Section~\ref{sec:setup} on all four
+architecture--dataset pairs. For each pair we track validation
+accuracy, F1, precision, recall and ROC-AUC at every epoch and report
+the best-F1 checkpoint per configuration. We additionally monitor two
+failure signatures: (i) \emph{collapse} to a constant majority-class
+predictor, identified by recall $=1.0$ jointly with AUC $\approx 0.5$,
+and (ii) silent degradation, identified by falling AUC at stable F1.
+Dense checkpoints are trained once per pair and shared by all pruning
+configurations of that pair, so that every pruned model of a pair
+starts from identical weights.
+
+% ------------------------------------------------------------------
+\section{Results}
+\label{sec:results}
+\TODO{This section intentionally contains placeholders; freeze numbers
+after the final runs.}
+
+\subsection{Dense Baselines}
+\TODO{2--3 sentences: dense accuracy/F1 of ResNet18 and VGG-16 on both
+datasets; note ResNet18 $\approx$ VGG-16 despite $12\times$ fewer
+parameters.}
+
+\subsection{Effect of Pruning Ratio}
+\begin{table}[t]
+\centering
+\caption{\TODO{Main results table: architecture, dataset, method,
+pruning ratio, nonzero params (M), accuracy, F1. Import from
+\texttt{final\_combined\_table.csv}.}}
+\label{tab:main}
+\begin{tabular}{llrrrr}
+\toprule
+\textbf{Arch./Method} & \textbf{Ratio} & \textbf{Params} &
+\multicolumn{2}{c}{\textbf{Optical / SAR}}\\
+\midrule
+\TODO{rows} & & & & \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\TODO{Figure: F1 vs.\ pruning ratio, one panel per architecture, solid
+= optical, dashed = SAR, color = method. Use the four
+\texttt{*\_prune\_plot.png} outputs or regenerate combined.}
+\caption{\TODO{caption}}
+\label{fig:f1curves}
+\end{figure}
+
+\TODO{Paragraph 1: unstructured pruning results across modalities.}
+
+\TODO{Paragraph 2: structured pruning results; where each
+architecture/modality degrades or collapses; the asymmetry between
+optical and SAR.}
+
+\TODO{Paragraph 3: the class-imbalance diagnostic --- collapsed models
+and why F1 alone can mask SAR failure (majority-class base rate);
+reference precision/recall/AUC columns.}
+
+\subsection{Compressibility Transfer}
+\TODO{Direct answer to the title question, stated in one short
+paragraph, with pointers to Table~\ref{tab:main} and
+Fig.~\ref{fig:f1curves}.}
+
+% ------------------------------------------------------------------
+\section{Limitations}
+\label{sec:limitations}
+\textbf{Single seed.} All 44 models share one seed; differences smaller
+than seed noise cannot be distinguished. Multi-seed replication of at
+least the structured-pruning runs is the most important extension, and
+our earlier multi-seed experience on Sen1Floods11 suggests seed
+variance is non-negligible at small validation sizes.
+
+\textbf{Small evaluation sets.} The withheld FloodNet val/test labels
+force evaluation on 199 held-out images (25 flooded); Sen1Floods11
+evaluation uses 221 chips. Single-image changes move FloodNet F1 by
+roughly 2 points, so small deltas must be interpreted cautiously.
+
+\textbf{Label conversion threshold.} The image-level labels for
+Sen1Floods11 depend on the $\tau=1\%$ water-fraction rule of
+Eq.~\eqref{eq:labelconv}; borderline chips change class under other
+thresholds, and a sensitivity analysis over $\tau$ is left to future
+work.
+
+\textbf{Masked rather than physically removed structure.} Structured
+pruning is applied as weight masks; channels are zeroed but not
+excised, so reported FLOP reductions are theoretical. Similarly,
+unstructured sparsity yields no wall-clock speedup without sparse
+kernels. Neither affects the accuracy comparison, which is our focus.
+
+\textbf{Modality is not the only difference.} FloodNet and
+Sen1Floods11 differ in resolution, scene content, geography, and label
+provenance (direct annotation vs.\ mask-derived labels), in addition
+to sensor physics. Our design holds the pipeline fixed but cannot
+attribute the observed gap to sensor modality alone; disentangling
+these factors (e.g., with paired optical/SAR acquisitions) is future
+work.
+
+\textbf{Opposite class imbalance.} Because the flooded class is the
+FloodNet minority but the Sen1Floods11 majority, aggregate metrics are
+not directly comparable across datasets; we therefore compare each
+pruned model only to its own dense baseline, never across datasets in
+absolute terms.
+
+\textbf{ImageNet pretraining for SAR.} Both backbones start from
+RGB-pretrained weights, which is standard but favorable to the optical
+dataset; SAR-specific pretraining might change where structured
+pruning begins to hurt.
+
+% ------------------------------------------------------------------
+\section{Conclusion}
+\TODO{3--4 sentences after results are frozen: restate the question,
+the answer, and the practical recommendation (per-modality validation
+of compression choices; metric triplet acc/F1/AUC for imbalanced flood
+data).}
+
+% ------------------------------------------------------------------
+\begin{thebibliography}{00}
+\bibitem{rahnemoonfar2021floodnet}
+M. Rahnemoonfar, T. Chowdhury, A. Sarkar, D. Varshney, M. Yari, and
+R. R. Murphy, ``FloodNet: A high resolution aerial imagery dataset for
+post flood scene understanding,'' \emph{IEEE Access}, vol.~9, pp.
+89644--89654, 2021.
+
+\bibitem{bonafilia2020sen1floods11}
+D. Bonafilia, B. Tellman, T. Anderson, and E. Issenberg,
+``Sen1Floods11: A georeferenced dataset to train and test deep learning
+flood algorithms for Sentinel-1,'' in \emph{Proc. IEEE/CVF Conf.
+Comput. Vis. Pattern Recognit. Workshops (CVPRW)}, 2020, pp. 210--211.
+
+\bibitem{khose2021semisupervised}
+S. Khose, A. Tiwari, and A. Ghosh, ``Semi-supervised classification and
+segmentation on high resolution aerial images,'' in \emph{NeurIPS
+Workshop on Tackling Climate Change with Machine Learning}, 2021,
+arXiv:2105.08655.
+
+\bibitem{khan2023floodresnet50}
+M. A. Khan, N. Ahmed, J. Padela, M. S. Raza, A. Gangopadhyay, J. Wang,
+J. Foulds, C. Busart, and R. F. Erbacher, ``Flood-ResNet50: Optimized
+deep learning model for efficient flood detection on edge device,'' in
+\emph{Proc. IEEE Int. Conf. Mach. Learn. Appl. (ICMLA)}, 2023, pp.
+512--519.
+
+\bibitem{han2015learning}
+S. Han, J. Pool, J. Tran, and W. J. Dally, ``Learning both weights and
+connections for efficient neural networks,'' in \emph{Adv. Neural Inf.
+Process. Syst. (NeurIPS)}, 2015, pp. 1135--1143.
+
+\bibitem{li2017pruning}
+H. Li, A. Kadav, I. Durdanovic, H. Samet, and H. P. Graf, ``Pruning
+filters for efficient ConvNets,'' in \emph{Int. Conf. Learn.
+Representations (ICLR)}, 2017.
+
+\bibitem{frankle2019lottery}
+J. Frankle and M. Carbin, ``The lottery ticket hypothesis: Finding
+sparse, trainable neural networks,'' in \emph{Int. Conf. Learn.
+Representations (ICLR)}, 2019.
+
+\bibitem{liu2019rethinking}
+Z. Liu, M. Sun, T. Zhou, G. Huang, and T. Darrell, ``Rethinking the
+value of network pruning,'' in \emph{Int. Conf. Learn. Representations
+(ICLR)}, 2019.
+
+\bibitem{blalock2020state}
+D. Blalock, J. J. Gonzalez Ortiz, J. Frankle, and J. Guttag, ``What is
+the state of neural network pruning?'' in \emph{Proc. Mach. Learn.
+Syst. (MLSys)}, 2020.
+
+\bibitem{he2016resnet}
+K. He, X. Zhang, S. Ren, and J. Sun, ``Deep residual learning for image
+recognition,'' in \emph{Proc. IEEE Conf. Comput. Vis. Pattern
+Recognit. (CVPR)}, 2016, pp. 770--778.
+
+\bibitem{simonyan2015vgg}
+K. Simonyan and A. Zisserman, ``Very deep convolutional networks for
+large-scale image recognition,'' in \emph{Int. Conf. Learn.
+Representations (ICLR)}, 2015.
+
+\bibitem{deng2009imagenet}
+J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei,
+``ImageNet: A large-scale hierarchical image database,'' in \emph{Proc.
+IEEE Conf. Comput. Vis. Pattern Recognit. (CVPR)}, 2009, pp. 248--255.
+
+\bibitem{lee2013pseudo}
+D.-H. Lee, ``Pseudo-label: The simple and efficient semi-supervised
+learning method for deep neural networks,'' in \emph{ICML Workshop on
+Challenges in Representation Learning}, 2013.
+
+\end{thebibliography}
+
+\end{document}
