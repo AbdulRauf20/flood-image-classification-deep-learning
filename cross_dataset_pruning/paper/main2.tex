@@ -36,13 +36,11 @@
 
 \newcommand{\TODO}[1]{\textcolor{red}{[TODO: #1]}}
 
-% Real photos go in paper/figs/. Until then a labeled box is shown.
+% Real photos. Each file is scaled to the same box; aspect ratio is kept.
 \newcommand{\sampleorbox}[2]{%
   \begin{minipage}[c][2.15cm][c]{0.23\textwidth}
     \centering
-    \IfFileExists{#1}{%
-      \includegraphics[width=\linewidth,height=2.0cm,keepaspectratio]{#1}}{%
-      \fbox{\parbox[c][1.85cm][c]{0.90\linewidth}{\centering\scriptsize #2}}}
+    \includegraphics[width=\linewidth,height=2.05cm,keepaspectratio]{#1}%
   \end{minipage}}
 
 \begin{document}
@@ -210,25 +208,7 @@ dataset. That is the comparison we run.
 
 \begin{figure*}[t]
 \centering
-\begin{tikzpicture}[
-  font=\scriptsize,
-  box/.style={draw, rounded corners=2pt, align=center,
-              minimum height=1.25cm, text width=2.15cm, fill=gray!8},
-  dbox/.style={draw, dashed, rounded corners=2pt, align=center,
-              minimum height=1.25cm, text width=2.25cm, fill=gray!18},
-  arr/.style={-{Stealth[length=2mm]}, thick}]
-\node[box] (data) {Two datasets\\FloodNet (optical)\\Sen1Floods11 (SAR)};
-\node[box, right=0.32cm of data] (prep) {Shared preprocess\\water-fraction label\\resize $400{\times}300$};
-\node[dbox, right=0.32cm of prep] (dense) {Dense baseline\\of the same seed\\50 epochs};
-\node[box, right=0.32cm of dense] (prune) {Prune that baseline\\unstruct.\ 50/90\%\\struct.\ 30/50/70/90\%};
-\node[box, right=0.32cm of prune] (ft) {Fine-tune\\50 epochs\\masks kept fixed};
-\node[box, right=0.32cm of ft] (eval) {Final epoch\\Acc, BAcc, mF1, AUC\\seeds 42, 124, 2024};
-\draw[arr] (data) -- (prep);
-\draw[arr] (prep) -- (dense);
-\draw[arr] (dense) -- (prune);
-\draw[arr] (prune) -- (ft);
-\draw[arr] (ft) -- (eval);
-\end{tikzpicture}
+\includegraphics[width=\textwidth,keepaspectratio]{Pipline.png}
 \caption{Study pipeline. The dashed box is the dense checkpoint of the
 same seed; every pruned run starts from it. Architecture, resolution,
 augmentation, sampler, optimizer, schedule, operators, ratios, and
