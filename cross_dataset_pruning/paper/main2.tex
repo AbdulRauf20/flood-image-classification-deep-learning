@@ -469,61 +469,60 @@ Sen1Floods11 & 90\% & .577$\pm$.047 & .609\\
 \nextgroupplot[title={FloodNet (optical)}, ylabel={macro-F1},
                ymin=0.50, ymax=1.02,
                legend to name=sharedlegend, legend columns=3]
-\addplot[mark=square*, solid, color=black, mark options={solid,fill=black}]
+\addplot[mark=square*, solid, color=red!80!black, mark options={solid,fill=red!80!black}]
   coordinates {
  (7.82,0.9253) +- (0,0.0143) (5.59,0.9283) +- (0,0.0196)
  (3.37,0.8566) +- (0,0.0772) (1.13,0.7981) +- (0,0.0781)};
 \addlegendentry{structured}
-\addplot[mark=*, dashed, color=black!65, mark options={solid,fill=black!65}]
+\addplot[mark=*, dashed, color=blue!80!black, mark options={solid,fill=blue!80!black}]
   coordinates {
  (5.59,0.9166) +- (0,0.0119) (1.13,0.9105) +- (0,0.0113)};
 \addlegendentry{unstructured}
-\addplot[only marks, mark=diamond*, mark size=2.6pt, color=black]
+\addplot[only marks, mark=diamond*, mark size=3pt, color=green!55!black, mark options={solid,fill=green!55!black}]
   coordinates {(11.18,0.9288) +- (0,0.0131)};
 \addlegendentry{dense}
-\addplot[densely dotted, color=black!55, domain=0:12] {0.9288};
+\addplot[dashed, color=green!55!black, domain=0:12] {0.9288};
 \nextgroupplot[title={Sen1Floods11 (SAR)}, ymin=0.50, ymax=1.02]
-\addplot[mark=square*, solid, color=black, mark options={solid,fill=black}]
+\addplot[mark=square*, solid, color=red!80!black, mark options={solid,fill=red!80!black}]
   coordinates {
  (7.82,0.7683) +- (0,0.0365) (5.59,0.7593) +- (0,0.0076)
  (3.37,0.7344) +- (0,0.0343) (1.13,0.5774) +- (0,0.0468)};
-\addplot[mark=*, dashed, color=black!65, mark options={solid,fill=black!65}]
+\addplot[mark=*, dashed, color=blue!80!black, mark options={solid,fill=blue!80!black}]
   coordinates {
  (5.59,0.8328) +- (0,0.0076) (1.13,0.7990) +- (0,0.0164)};
-\addplot[only marks, mark=diamond*, mark size=2.6pt, color=black]
+\addplot[only marks, mark=diamond*, mark size=3pt, color=green!55!black, mark options={solid,fill=green!55!black}]
   coordinates {(11.18,0.8267) +- (0,0.0111)};
-\addplot[densely dotted, color=black!55, domain=0:12] {0.8267};
+\addplot[dashed, color=green!55!black, domain=0:12] {0.8267};
 \nextgroupplot[ylabel={AUC}, ymin=0.70, ymax=1.02]
-\addplot[mark=square*, solid, color=black, mark options={solid,fill=black}]
+\addplot[mark=square*, solid, color=red!80!black, mark options={solid,fill=red!80!black}]
   coordinates {
  (7.82,0.9856) +- (0,0.0148) (5.59,0.9886) +- (0,0.0051)
  (3.37,0.9297) +- (0,0.0631) (1.13,0.9299) +- (0,0.0220)};
-\addplot[mark=*, dashed, color=black!65, mark options={solid,fill=black!65}]
+\addplot[mark=*, dashed, color=blue!80!black, mark options={solid,fill=blue!80!black}]
   coordinates {
  (5.59,0.9947) +- (0,0.0020) (1.13,0.9891) +- (0,0.0022)};
-\addplot[only marks, mark=diamond*, mark size=2.6pt, color=black]
+\addplot[only marks, mark=diamond*, mark size=3pt, color=green!55!black, mark options={solid,fill=green!55!black}]
   coordinates {(11.18,0.9912) +- (0,0.0034)};
-\addplot[densely dotted, color=black!55, domain=0:12] {0.9912};
+\addplot[dashed, color=green!55!black, domain=0:12] {0.9912};
 \nextgroupplot[ymin=0.70, ymax=1.02]
-\addplot[mark=square*, solid, color=black, mark options={solid,fill=black}]
+\addplot[mark=square*, solid, color=red!80!black, mark options={solid,fill=red!80!black}]
   coordinates {
  (7.82,0.8581) +- (0,0.0189) (5.59,0.8411) +- (0,0.0118)
  (3.37,0.8344) +- (0,0.0153) (1.13,0.7631) +- (0,0.0316)};
-\addplot[mark=*, dashed, color=black!65, mark options={solid,fill=black!65}]
+\addplot[mark=*, dashed, color=blue!80!black, mark options={solid,fill=blue!80!black}]
   coordinates {
  (5.59,0.9117) +- (0,0.0135) (1.13,0.8875) +- (0,0.0207)};
-\addplot[only marks, mark=diamond*, mark size=2.6pt, color=black]
+\addplot[only marks, mark=diamond*, mark size=3pt, color=green!55!black, mark options={solid,fill=green!55!black}]
   coordinates {(11.18,0.9077) +- (0,0.0160)};
-\addplot[densely dotted, color=black!55, domain=0:12] {0.9077};
+\addplot[dashed, color=green!55!black, domain=0:12] {0.9077};
 \end{groupplot}
 \node[anchor=south] at ($(group c1r1.north east)!0.5!(group c2r1.north west)+(0,0.55cm)$)
   {\pgfplotslegendfromname{sharedlegend}};
 \end{tikzpicture}
 \caption{ResNet18 macro-F1 (top) and AUC (bottom) against masked
 nonzero parameters. Squares, solid: structured. Circles, dashed:
-unstructured. Diamond and dotted line: dense mean. Error bars: sample
-std over 3 seeds. Black and gray are used so the curves stay distinct
-in print. This axis is not a physical compression axis
+unstructured. Green diamond and dashed line: dense mean. Error bars:
+sample std over 3 seeds. This axis is not a physical compression axis
 (Section~\ref{sec:setup}).}
 \label{fig:curves}
 \end{figure*}
