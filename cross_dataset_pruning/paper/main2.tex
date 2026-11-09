@@ -13,7 +13,7 @@
 %   ± is the SAMPLE std (divisor n-1). The logs store the population
 %   std (divisor n). We multiply by sqrt(n/(n-1)). For n=3 that
 %   factor is sqrt(3/2). Two-seed rows have no ±.
-% No AI-generated images. The curves and the pipeline are TikZ.
+% No AI-generated images. The curves are TikZ. The pipeline is fig1_final.png.
 % ============================================================
 \documentclass[conference]{IEEEtran}
 \IEEEoverridecommandlockouts
@@ -34,54 +34,57 @@
 
 \begin{document}
 
-\title{Does Compressibility Transfer Across Datasets?\\
-A Study of CNN Pruning for Optical UAV and SAR Flood Classification}
+\title{Does Pruning Transfer Across Datasets?\\
+A Comparative Study of Structured and Unstructured CNN Pruning}
 
 \author{\IEEEauthorblockN{Abdul Rauf}
-\IEEEauthorblockA{\textit{Faculty of Computer Science and Engineering} \\
-\textit{GIK Institute of Engineering Sciences and Technology}\\
-Topi, Pakistan \\
+\IEEEauthorblockA{\textit{Faculty of Computer Science}\\
+\textit{and Engineering}\\
+\textit{Ghulam Ishaq Khan Institute}\\
+\textit{of Engineering Sciences}\\
+\textit{and Technology (GIKI)}\\
+Topi, Pakistan\\
 u2024020@giki.edu.pk}
 \and
 \IEEEauthorblockN{Muhammad Bilal}
-\IEEEauthorblockA{\textit{Faculty of Computer Science and Engineering} \\
-\textit{GIK Institute of Engineering Sciences and Technology}\\
-Topi, Pakistan \\
+\IEEEauthorblockA{\textit{Faculty of Computer Science}\\
+\textit{and Engineering}\\
+\textit{Ghulam Ishaq Khan Institute}\\
+\textit{of Engineering Sciences}\\
+\textit{and Technology (GIKI)}\\
+Topi, Pakistan\\
 u2023392@giki.edu.pk}
 \and
-\IEEEauthorblockN{Huzaifa Shah}
-\IEEEauthorblockA{\textit{Faculty of Computer Science and Engineering} \\
-\textit{GIK Institute of Engineering Sciences and Technology}\\
-Topi, Pakistan \\
+\IEEEauthorblockN{Muhammad Huzaifa Shah}
+\IEEEauthorblockA{\textit{Faculty of Computer Science}\\
+\textit{and Engineering}\\
+\textit{Ghulam Ishaq Khan Institute}\\
+\textit{of Engineering Sciences}\\
+\textit{and Technology (GIKI)}\\
+Topi, Pakistan\\
 huzaifa.shah@giki.edu.pk}
 }
-
 \maketitle
 
 \begin{abstract}
-Magnitude pruning is a common way to run convolutional networks on the
-small platforms used in disaster response, but it is usually tested
-only on optical images. We ask whether the same compression still holds
-on a second flood dataset. One supervised pipeline trains ResNet18 and
-VGG-16 on FloodNet (optical UAV imagery) and Sen1Floods11 (Sentinel-1
-SAR). SAR chips are labeled by a water-fraction rule, and every number
-uses a split of the labeled images. We apply global unstructured and
-filter-wise structured $L_1$ pruning, then fine-tune every setting the
-same way. Over three seeds (96 runs) we report final-epoch accuracy,
-balanced accuracy, macro-F1, and AUC. On these two datasets,
-unstructured pruning transfers: at 90\% sparsity ResNet18 loses at most
-$0.03$ macro-F1 on both. Structured pruning does not. At 50\%, FloodNet
-loses less than $0.001$ macro-F1 and Sen1Floods11 loses $0.067$, and
-the gap grows with the ratio. A lower fine-tuning learning rate does
-not close it. VGG-16 is unstable: one dense SAR seed fails while AUC
-stays near $0.858$, and several structured runs collapse. A sparsity
-budget checked on one of these datasets should be checked again on the
-other.
+One supervised pipeline tests magnitude pruning of ResNet18 and
+VGG-16 on FloodNet, unmanned aerial vehicle (UAV), and Sen1Floods11,
+synthetic aperture radar (SAR). SAR labels use a water-fraction rule,
+and every number uses a split of labeled images. Global unstructured
+and filter-wise structured $L_1$ methods share a fine-tune. Three
+seeds (96 runs) give final-epoch accuracy, balanced accuracy,
+macro-F1, and AUC. On these two datasets, 90\% unstructured pruning
+costs ResNet18 at most $0.03$ macro-F1. At 50\% structured pruning,
+FloodNet loses $<0.001$ and Sen1Floods11 loses $0.067$ macro-F1; the
+gap grows with the ratio. A lower fine-tuning learning rate does not
+close it. One dense VGG-16 SAR seed fails (AUC near $0.858$), and
+structured runs collapse. Recheck a sparsity budget on the other
+dataset.
 \end{abstract}
 
 \begin{IEEEkeywords}
-network pruning, model compression, flood detection, SAR, optical
-remote sensing, FloodNet, Sen1Floods11
+network pruning, model compression, flood detection, synthetic
+aperture radar (SAR), optical remote sensing, FloodNet, Sen1Floods11
 \end{IEEEkeywords}
 
 \section{Introduction}
@@ -133,7 +136,8 @@ not remove that gap.
 \item VGG-16 as an instability case: one dense SAR seed fails at the
 final-epoch threshold while AUC stays near $0.858$, and structured
 runs collapse on both datasets. This is consistent with a serial
-network that has no skip connections and no BatchNorm; we do not claim
+network that has no skip connections and no batch normalization
+(BatchNorm); we do not claim
 that missing skips are the only cause.
 \end{itemize}
 
@@ -155,7 +159,8 @@ accuracy for a semi-supervised ResNet18 (11.6M parameters) on FloodNet,
 using pseudo-labels \cite{lee2013pseudo}. We use supervised training
 only, so pruning is not mixed with pseudo-label noise. Khan \emph{et
 al.} \cite{khan2023floodresnet50} report 96.43\% accuracy and 86.36\%
-F1 for Flood-ResNet50 (98\,MB, 4.3 billion FLOPs) on a Jetson Nano.
+F1 score for Flood-ResNet50 (98 megabytes (MB), 4.3 billion
+floating-point operations (FLOPs)) on a Jetson Nano.
 Their F1 is not our macro-F1. Both published scores use the hidden
 FloodNet test set. Our dense ResNet18 reaches 97.0\% accuracy and
 0.929 macro-F1 on a 199-image split of the labeled training images.
@@ -191,52 +196,12 @@ dataset. That is the comparison we run.
 
 \begin{figure*}[t]
 \centering
-\resizebox{\textwidth}{!}{%
-\begin{tikzpicture}[
-  font=\scriptsize,
-  ds/.style={draw=blue!55!black, line width=0.65pt, rounded corners=2pt,
-             align=center, fill=blue!8, minimum width=2.55cm,
-             minimum height=0.92cm, inner sep=2pt},
-  stage/.style={draw=black!75, line width=0.55pt, rounded corners=2pt,
-               align=center, fill=white, text width=2.35cm,
-               minimum height=1.72cm, inner sep=3pt},
-  base/.style={stage, draw=black, line width=0.8pt, dashed, fill=black!7},
-  arr/.style={-{Stealth[length=1.8mm]}, line width=0.7pt, draw=black!75}]
-\node[ds] (fn) at (0, 0.56) {\textbf{FloodNet}\\optical UAV};
-\node[ds] (s1) at (0,-0.56) {\textbf{Sen1Floods11}\\Sentinel-1 SAR};
-\node[stage] (prep) at (3.55,0) {\textbf{1\quad Preprocess}\\[1pt]
-  water-fraction label\\resize $400{\times}300$};
-\node[base] (dense) at (6.85,0) {\textbf{2\quad Dense baseline}\\[1pt]
-  same seed, 50 epochs\\every prune starts here};
-\node[stage] (pr) at (10.15,0) {\textbf{3\quad Prune $L_1$}\\[1pt]
-  unstruct.\ 50\%, 90\%\\struct.\ 30, 50, 70, 90\%};
-\node[stage] (ft) at (13.45,0) {\textbf{4\quad Fine-tune}\\[1pt]
-  50 epochs\\masks kept fixed};
-\node[stage] (ev) at (16.75,0) {\textbf{5\quad Final epoch}\\[1pt]
-  Acc, BAcc, mF1, AUC\\seeds 42, 124, 2024};
-\coordinate (join) at (1.85,0);
-\draw (fn.east) -| (join);
-\draw (s1.east) -| (join);
-\draw[arr] (join) -- (prep.west);
-\draw[arr] (prep) -- (dense);
-\draw[arr] (dense) -- (pr);
-\draw[arr] (pr) -- (ft);
-\draw[arr] (ft) -- (ev);
-\begin{scope}[on background layer]
-  \node[draw=black!30, fill=black!3, rounded corners=3pt,
-        fit=(prep)(ev), inner xsep=7pt, inner ysep=5pt] (band) {};
-\end{scope}
-\draw[decorate, decoration={brace, mirror, amplitude=3pt, raise=1pt},
-      draw=black!60]
-  (band.south west) -- (band.south east)
-  node[midway, below=6pt, font=\scriptsize, align=center]
-  {shared pipeline, held fixed};
-\end{tikzpicture}}
-\caption{Study pipeline. The two datasets enter one pipeline. The
-dashed box is the dense checkpoint of the same seed; every pruned run
-starts from it. Architecture, resolution, augmentation, sampler,
-optimizer, schedule, operators, ratios, and fine-tuning budget stay
-fixed. Only the dataset changes.}
+\includegraphics[width=\textwidth]{fig1_final.png}
+\caption{Study pipeline. Both datasets follow the same steps. Every
+pruned run starts from the dense baseline of the same seed.
+Architecture, resolution, augmentation, sampler, optimizer, schedule,
+operators, ratios, and fine-tuning budget stay fixed. Only the dataset
+changes.}
 \label{fig:pipeline}
 \end{figure*}
 
@@ -245,7 +210,9 @@ lists the data actually used.
 
 \begin{table}[t]
 \centering
-\caption{Data used in this study. Sizes are width$\times$height.}
+\caption{Data used in this study. Sizes are width$\times$height.
+RGB is red, green, and blue. VV is vertical-transmit
+vertical-receive and VH is vertical-transmit horizontal-receive.}
 \label{tab:datasets}
 \footnotesize
 \setlength{\tabcolsep}{3.2pt}
@@ -288,7 +255,7 @@ data seed (220/221). The split is by chip, not by flood event, so
 neighboring chips from one event can fall on both sides. We treat that
 as a limitation, not as a solved robustness check.
 
-SAR backscatter is clipped to $[-50,1]$\,dB, scaled to $[0,1]$, and
+SAR backscatter is clipped to $[-50,1]$ decibels (dB), scaled to $[0,1]$, and
 stacked as $(\mathrm{VV},\mathrm{VH},(\mathrm{VV}{+}\mathrm{VH})/2)$.
 The same clip, scale, and ImageNet normalization are used for training
 and validation. Chips are $512\times512$ and are resized to
@@ -297,58 +264,48 @@ the SAR aspect ratio from $1{:}1$ to $4{:}3$.
 
 \begin{figure*}[t]
 \centering
-\setlength{\fboxsep}{5pt}%
-\setlength{\fboxrule}{0.6pt}%
-\fbox{\begin{minipage}{0.968\textwidth}
-\begin{minipage}[t]{0.482\linewidth}
+{\footnotesize\bfseries FloodNet (optical UAV)}\\[3pt]
+\begin{minipage}[t]{0.49\linewidth}
   \centering
-  {\footnotesize\bfseries FloodNet (optical UAV)}\\[3pt]
-  \begin{minipage}[t]{0.48\linewidth}
-    \centering
-    \begin{minipage}[c][2.35cm][c]{\linewidth}
-      \centering
-      \includegraphics[width=\linewidth,height=2.3cm,keepaspectratio]{figs/floodnet_flooded.jpg}
-    \end{minipage}\\[2pt]
-    {\scriptsize (a) Flooded}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.48\linewidth}
-    \centering
-    \begin{minipage}[c][2.35cm][c]{\linewidth}
-      \centering
-      \includegraphics[width=\linewidth,height=2.3cm,keepaspectratio]{figs/floodnet_dry.jpg}
-    \end{minipage}\\[2pt]
-    {\scriptsize (b) Non-flooded}
-  \end{minipage}
-\end{minipage}%
-\hspace{0.008\linewidth}%
-\vrule width 0.6pt
-\hspace{0.008\linewidth}%
-\begin{minipage}[t]{0.482\linewidth}
+  \includegraphics[width=\linewidth,height=3.55cm,keepaspectratio]{figs/floodnet_flooded.jpg}\\[1pt]
+  {\scriptsize (a) Flooded}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.49\linewidth}
   \centering
-  {\footnotesize\bfseries Sen1Floods11 (Sentinel-1 SAR)}\\[3pt]
-  \begin{minipage}[t]{0.48\linewidth}
-    \centering
-    \begin{minipage}[c][2.35cm][c]{\linewidth}
-      \centering
-      \includegraphics[width=\linewidth,height=2.3cm,keepaspectratio]{figs/s1_chip.png}
-    \end{minipage}\\[2pt]
-    {\scriptsize (c) Chip (VV, VH, mean)}
-  \end{minipage}\hfill
-  \begin{minipage}[t]{0.48\linewidth}
-    \centering
-    \begin{minipage}[c][2.35cm][c]{\linewidth}
-      \centering
-      \includegraphics[width=\linewidth,height=2.3cm,keepaspectratio]{figs/s1_mask.png}
-    \end{minipage}\\[2pt]
-    {\scriptsize (d) Water mask, same chip}
-  \end{minipage}
+  \includegraphics[width=\linewidth,height=3.55cm,keepaspectratio]{figs/floodnet_dry.jpg}\\[1pt]
+  {\scriptsize (b) Non-flooded}
 \end{minipage}
-\end{minipage}}
-\caption{Examples from the two datasets. Left of the divider: FloodNet
-optical UAV images, (a)~flooded and (b)~non-flooded. Right: one
-Sen1Floods11 chip as the three-channel composite the network sees,
-(c)~VV, VH, and their mean, and (d)~the water mask of that same chip.
-Eq.~\eqref{eq:labelconv} turns the mask into one image label.}
+
+\vspace{4pt}
+{\footnotesize\bfseries Sen1Floods11 (Sentinel-1 SAR)}\\[3pt]
+\begin{minipage}[t]{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth,height=3.15cm,keepaspectratio]{assets/sen1floods11/s1_chip.jpg}\\[1pt]
+  {\scriptsize (c) Bolivia\_360519}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth,height=3.15cm,keepaspectratio]{assets/sen1floods11/s1_mask.png}\\[1pt]
+  {\scriptsize (d) Mask, 1.1\% water}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth,height=3.15cm,keepaspectratio]{figs/s1_chip_india.png}\\[1pt]
+  {\scriptsize (e) India\_1017769}
+\end{minipage}\hfill
+\begin{minipage}[t]{0.24\linewidth}
+  \centering
+  \includegraphics[width=\linewidth,height=3.15cm,keepaspectratio]{figs/s1_mask_india.png}\\[1pt]
+  {\scriptsize (f) Mask, 56.7\% water}
+\end{minipage}
+\caption{Examples from the two datasets. (a) and (b) are FloodNet
+optical UAV images.
+(c) and (e) are Sen1Floods11 chips as the three-channel composite the
+network sees (VV, VH, and their mean). (d) and (f) are the water masks
+of those same chips: white is water, black is non-water, gray is
+invalid. Water among valid pixels is 1.1\% on Bolivia\_360519 and
+56.7\% on India\_1017769. Eq.~\eqref{eq:labelconv} turns each mask into
+one image label.}
 \label{fig:samples}
 \end{figure*}
 
@@ -361,7 +318,7 @@ with its own dense baseline.
 Every dense run and every fine-tune uses ImageNet initialization
 \cite{deng2009imagenet}, a 2-logit head, unweighted cross-entropy, and
 a class-balanced weighted sampler. The only augmentation is random
-horizontal and vertical flips. The optimizer is SGD with learning rate
+horizontal and vertical flips. The optimizer is stochastic gradient descent (SGD) with learning rate
 $0.01$, momentum $0$, and weight decay $0$. This recipe is unusual. We
 keep it because the study holds one recipe fixed; we do not claim it is
 the best optimizer for SAR. Each run lasts 50 epochs. We score the last
@@ -371,9 +328,9 @@ augmentation. The split does not change. Batch size is 64 for ResNet18
 and 16 for VGG-16, and it is the same on both datasets.
 ResNet18 BatchNorm layers stay in train mode during fine-tuning and in
 eval mode at test time. Torchvision VGG-16 has no BatchNorm.
-All 96 runs were executed on Kaggle with the free \emph{GPU T4 x2}
-accelerator: two NVIDIA Tesla T4 GPUs are attached to that session, and
-each model was trained on one of them.
+All 96 runs were executed on Kaggle. That session attaches two NVIDIA
+Tesla T4 graphics processing units (GPUs), the free accelerator named
+GPU T4 x2, and each model was trained on one of them.
 Throughout, $\pm$ is the sample standard deviation over the three seeds.
 The logs store the population standard deviation; we rescale by
 $\sqrt{3/2}$.
@@ -412,7 +369,7 @@ masked ResNet filter are not removed. A zeroed convolution followed by
 BatchNorm can still emit a constant, so the channel is not physically
 gone. The horizontal axis of Fig.~\ref{fig:curves} is the count of
 remaining stored parameters, including unpruned biases and BatchNorm
-terms. It is not a FLOP count and not the size after deleting channels.
+terms. It is not a FLOPs count and not the size after deleting channels.
 At 50\% both families report 5.59M remaining parameters for that
 reason; a network with the channels actually deleted would be smaller.
 Second, ResNet18's parameter-free identity shortcuts are not pruned.
@@ -424,12 +381,14 @@ Its $1\times1$ projection shortcuts are convolutions with 128, 256, or
 
 \begin{table}[t]
 \centering
-\caption{ResNet18, final epoch, mean $\pm$ sample std over 3 seeds.
-Par.\ is remaining stored parameters in millions, not physical
-channel-removed size. FT learning rate $0.01$.}
+\caption{ResNet18, final epoch, mean $\pm$ sample standard deviation
+(std) over 3 seeds. Par.\ is remaining stored parameters in millions,
+not physical channel-removed size. mF1 is macro-F1. Unstruct.\ is
+unstructured. Fine-tuning learning rate $0.01$. The best mean in each
+metric column is in bold.}
 \label{tab:resnet}
 \footnotesize
-\setlength{\tabcolsep}{3.2pt}
+\setlength{\tabcolsep}{1.5pt}
 \begin{tabular}{llr cc cc}
 \toprule
 & & & \multicolumn{2}{c}{\textbf{FloodNet}} &
@@ -438,8 +397,8 @@ channel-removed size. FT learning rate $0.01$.}
 \textbf{Method} & \textbf{Ratio} & \textbf{Par.} &
 \textbf{mF1} & \textbf{AUC} & \textbf{mF1} & \textbf{AUC}\\
 \midrule
-dense      & 0\%  & 11.18 & .929$\pm$.013 & .991$\pm$.003 & .827$\pm$.011 & .908$\pm$.016\\
-unstruct.  & 50\% &  5.59 & .917$\pm$.012 & .995$\pm$.002 & .833$\pm$.008 & .912$\pm$.014\\
+dense      & 0\%  & 11.18 & \textbf{.929}$\pm$.013 & .991$\pm$.003 & .827$\pm$.011 & .908$\pm$.016\\
+unstruct.  & 50\% &  5.59 & .917$\pm$.012 & \textbf{.995}$\pm$.002 & \textbf{.833}$\pm$.008 & \textbf{.912}$\pm$.014\\
 unstruct.  & 90\% &  1.13 & .911$\pm$.011 & .989$\pm$.002 & .799$\pm$.016 & .888$\pm$.021\\
 structured & 30\% &  7.82 & .925$\pm$.014 & .986$\pm$.015 & .768$\pm$.037 & .858$\pm$.019\\
 structured & 50\% &  5.59 & .928$\pm$.020 & .989$\pm$.005 & .759$\pm$.008 & .841$\pm$.012\\
@@ -451,8 +410,9 @@ structured & 90\% &  1.13 & .798$\pm$.078 & .930$\pm$.022 & .577$\pm$.047 & .763
 
 \begin{table}[t]
 \centering
-\caption{ResNet18 accuracy and balanced accuracy, same runs as
-Table~\ref{tab:resnet}. Means over 3 seeds, sample std.}
+\caption{ResNet18 accuracy (Acc) and balanced accuracy (BAcc), same
+runs as Table~\ref{tab:resnet}. Means over 3 seeds, sample std. The
+best mean in each metric column is in bold. Ties are both bold.}
 \label{tab:acc}
 \footnotesize
 \setlength{\tabcolsep}{3.2pt}
@@ -464,9 +424,9 @@ Table~\ref{tab:resnet}. Means over 3 seeds, sample std.}
 \textbf{Method} & \textbf{Ratio} & \textbf{Acc} & \textbf{BAcc} &
 \textbf{Acc} & \textbf{BAcc}\\
 \midrule
-dense     & 0\%  & .970$\pm$.005 & .914$\pm$.020 & .840$\pm$.011 & .840$\pm$.009\\
-unstruct. & 90\% & .960$\pm$.005 & .920$\pm$.012 & .815$\pm$.016 & .811$\pm$.016\\
-struct.   & 50\% & .970$\pm$.009 & .909$\pm$.013 & .780$\pm$.007 & .767$\pm$.010\\
+dense     & 0\%  & \textbf{.970}$\pm$.005 & .914$\pm$.020 & \textbf{.840}$\pm$.011 & \textbf{.840}$\pm$.009\\
+unstruct. & 90\% & .960$\pm$.005 & \textbf{.920}$\pm$.012 & .815$\pm$.016 & .811$\pm$.016\\
+struct.   & 50\% & \textbf{.970}$\pm$.009 & .909$\pm$.013 & .780$\pm$.007 & .767$\pm$.010\\
 struct.   & 90\% & .893$\pm$.072 & .836$\pm$.058 & .578$\pm$.047 & .656$\pm$.044\\
 \bottomrule
 \end{tabular}
@@ -474,9 +434,10 @@ struct.   & 90\% & .893$\pm$.072 & .836$\pm$.058 & .578$\pm$.047 & .656$\pm$.044
 
 \begin{table}[t]
 \centering
-\caption{ResNet18 structured pruning, macro-F1. The $0.01$ column is
-3 seeds. The $0.001$ column is the mean of 2 seeds and has no std.
-The lower rate does not restore Sen1Floods11.}
+\caption{ResNet18 structured pruning, macro-F1 (mF1). lr is the
+learning rate. The $0.01$ column is 3 seeds. The $0.001$ column is the
+mean of 2 seeds and has no std. The best mean in each column is in
+bold. The lower rate does not restore Sen1Floods11.}
 \label{tab:lrcontrol}
 \footnotesize
 \begin{tabular}{llcc}
@@ -484,7 +445,7 @@ The lower rate does not restore Sen1Floods11.}
 \textbf{Dataset} & \textbf{Ratio} & \textbf{mF1, lr 0.01} &
 \textbf{mF1, lr 0.001}\\
 \midrule
-FloodNet     & 50\% & .928$\pm$.020 & .914\\
+FloodNet     & 50\% & \textbf{.928}$\pm$.020 & \textbf{.914}\\
 FloodNet     & 90\% & .798$\pm$.078 & .699\\
 Sen1Floods11 & 50\% & .759$\pm$.008 & .718\\
 Sen1Floods11 & 90\% & .577$\pm$.047 & .609\\
@@ -500,7 +461,7 @@ Sen1Floods11 & 90\% & .577$\pm$.047 & .609\\
                vertical sep=1.25cm},
   width=0.44\textwidth, height=3.7cm,
   x dir=reverse, xmin=0, xmax=12,
-  xlabel={masked nonzero parameters (M)},
+  xlabel={masked nonzero parameters (millions)},
   grid=major, grid style={gray!25},
   tick label style={font=\scriptsize},
   label style={font=\scriptsize},
@@ -611,7 +572,8 @@ a longer schedule was not tested.
 \centering
 \caption{VGG-16, final epoch, sample std over 3 seeds. The last row is
 the mean of 2 seeds. $\dagger$ means at least one seed has balanced
-accuracy $0.5$ (a constant prediction).}
+accuracy $0.5$ (a constant prediction). The best mean in each metric
+column is in bold. Ties are both bold.}
 \label{tab:vgg}
 \footnotesize
 \setlength{\tabcolsep}{2.4pt}
@@ -623,9 +585,9 @@ accuracy $0.5$ (a constant prediction).}
 \textbf{Method} & \textbf{Ratio} & \textbf{mF1} & \textbf{AUC} &
 \textbf{mF1} & \textbf{AUC}\\
 \midrule
-dense     & 0\%  & .924$\pm$.007 & .990$\pm$.000 & .621$\pm$.321$^\dagger$ & .858$\pm$.004\\
-unstruct. & 50\% & .924$\pm$.007 & .990$\pm$.001 & .601$\pm$.304$^\dagger$ & .849$\pm$.006\\
-unstruct. & 90\% & .943$\pm$.018 & .980$\pm$.024 & .597$\pm$.300$^\dagger$ & .846$\pm$.017\\
+dense     & 0\%  & .924$\pm$.007 & \textbf{.990}$\pm$.000 & \textbf{.621}$\pm$.321$^\dagger$ & \textbf{.858}$\pm$.004\\
+unstruct. & 50\% & .924$\pm$.007 & \textbf{.990}$\pm$.001 & .601$\pm$.304$^\dagger$ & .849$\pm$.006\\
+unstruct. & 90\% & \textbf{.943}$\pm$.018 & .980$\pm$.024 & .597$\pm$.300$^\dagger$ & .846$\pm$.017\\
 struct.   & 30\% & .386$\pm$.244$^\dagger$ & .737$\pm$.043 & .586$\pm$.290$^\dagger$ & .834$\pm$.006\\
 struct.   & 50\% & .803$\pm$.093 & .940$\pm$.033 & .519$\pm$.233$^\dagger$ & .788$\pm$.009\\
 struct.   & 70\% & .621$\pm$.078 & .675$\pm$.229 & .300$\pm$.086$^\dagger$ & .502$\pm$.276\\
@@ -686,7 +648,7 @@ datasets differ in more than the camera.
 The pipeline is fixed, so the gap can be tied to the dataset as a
 whole. It cannot be tied to SAR versus optical alone. FloodNet and
 Sen1Floods11 differ in count (398 vs.\ 441), resolution
-($4000\times3000$ UAV frames vs.\ $512\times512$ chips at 10\,m),
+($4000\times3000$ UAV frames vs.\ $512\times512$ chips at 10 meters),
 imbalance (12.8\% vs.\ 66.4\% positive), geography, and labels (a human
 image label vs.\ Eq.~\eqref{eq:labelconv}). The SAR split is random
 over chips, so chips from the same event can leak across the split.
